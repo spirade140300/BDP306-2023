@@ -1,7 +1,13 @@
+import MetaMaskOnboarding from '@metamask/onboarding';
+const onboarding = new MetaMaskOnboarding();
+
 $(function () {
   // Import Metamask
   $('#import-metamask').on('click', function () {
     /* TODO: Importing wallet by Metamask goes here. */
+    connectWallet().then((accounts) => {
+      
+    })
   });
 
   // Handle on Source Amount Changed
@@ -44,7 +50,50 @@ $(function () {
 
   // Close Modal
   $('.modal').on('click', function (e) {
-    if(e.target !== this ) return;
+    if (e.target !== this) return;
     $(this).removeClass('modal--active');
   });
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const onboarding = new MetaMaskOnboarding();
+    const onboardButton = document.getElementById('onboard');
+    let accounts;
+
+    const updateButton = () => {
+      if (!MetaMaskOnboarding.isMetaMaskInstalled()) {
+        onboardButton.innerText = 'Click here to install MetaMask!';
+        onboardButton.onclick = () => {
+          onboardButton.innerText = 'Onboarding in progress';
+          onboardButton.disabled = true;
+          onboarding.startOnboarding();
+        };
+      } else if (accounts && accounts.length > 0) {
+        onboardButton.innerText = 'Connected';
+        onboardButton.disabled = true;
+        onboarding.stopOnboarding();
+      } else {
+        onboardButton.innerText = 'Connect';
+        onboardButton.onclick = async () => {
+          await window.ethereum.request({
+            method: 'eth_requestAccounts',
+          });
+        };
+      }
+    };
+
+    updateButton();
+    if (MetaMaskOnboarding.isMetaMaskInstalled()) {
+      window.ethereum.on('accountsChanged', (newAccounts) => {
+        accounts = newAccounts;
+        updateButton();
+      });
+    }
+  });
+
+  async function connectWallet() {
+    return await ethereum.request({ method: 'eth_accounts' });
+  }
+
 });
+
+

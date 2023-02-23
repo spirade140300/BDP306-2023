@@ -21,7 +21,7 @@ input {
   left: 0;
   width: 100%;
   height: 860px;
-  background: url(/assets/images/backgrounds/landing-page.png) bottom;
+  background: url(../images/backgrounds/landing-page.png) bottom;
   background-size: cover;
   z-index: -1;
 }
@@ -299,15 +299,15 @@ input {
 }
 
 .import-account__icon.metamask {
-  background-image: url(/assets/images/logos/metamask.svg);
+  background-image: url(../images/logos/metamask.svg);
 }
 
 .import-account__icon.keystore {
-  background-image: url(/assets/images/logos/keystore.svg);
+  background-image: url(../images/logos/keystore.svg);
 }
 
 .import-account__icon.private-key {
-  background-image: url(/assets/images/logos/private-key.svg);
+  background-image: url(../images/logos/private-key.svg);
 }
 
 .import-account__name {
@@ -320,15 +320,15 @@ input {
 }
 
 .import-account__item:hover .import-account__icon.metamask {
-  background-image: url(/assets/images/logos/metamask-active.svg);
+  background-image: url(../images/logos/metamask-active.svg);
 }
 
 .import-account__item:hover .import-account__icon.keystore {
-  background-image: url(/assets/images/logos/keystore-active.svg);
+  background-image: url(../images/logos/keystore-active.svg);
 }
 
 .import-account__item:hover .import-account__icon.private-key {
-  background-image: url(/assets/images/logos/private-key-active.svg);
+  background-image: url(../images/logos/private-key-active.svg);
 }
 /*========= End Import Account =========*/
 
@@ -346,7 +346,7 @@ input {
   width: 32px;
   height: 32px;
   margin: 30px auto;
-  background-image: url(/assets/images/icons/swap.svg);
+  background-image: url(../images/icons/swap.svg);
   cursor: pointer;
   transition: all .3s;
 }
