@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@metamask/onboarding": "^1.0.1"
+  }
+}
