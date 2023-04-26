@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "chai": "^4.3.7",
+    "ether": "^0.0.9",
+    "ethers": "^6.0.8",
+    "prb-math": "^2.4.3"
+  },
+  "devDependencies": {
+    "babel-preset-es2015": "^6.24.1"
+  }
+}

@@ -1,85 +1,243 @@
-pragma solidity <0.8.0;
-import "./Token.sol";
+pragma solidity ^0.8.0;
+
 import "./Reserve.sol";
+import "./BasicToken.sol";
+
 
 contract Exchange {
-    using SafeMath for uint256;
-    address _owner;
-    mapping (Token => Reserve) public reserves;
-    bool _tradeEnabled;
+    mapping(address => address) token_reserve_map;
+    address[] tokenAddresses;
+    string[] tokenSymbols;
+    string[] tokenNames;
+    address public owner;
 
-    constructor() public {
-        _owner = msg.sender;
-        _tradeEnabled = true;
-    }
-
-    modifier onlyOwner {
-        require(msg.sender == _owner);
+    modifier onlyOwner() {
+        require(msg.sender == owner);
         _;
     }
 
-    function convertEthToTokenByRate(uint256 amount, uint256 buyRate) public pure returns (uint256) {
-        return amount * buyRate / 1e18;
+    constructor() public {
+        owner = msg.sender;
     }
 
-    // convert from token to eth by sell rate
-    // amount * ether / sell rate
-    function convertTokenToEthByRate(uint256 amount, uint256 sellRate) public pure returns (uint256) {
-        return amount * 1e18 / sellRate;
+    receive() external payable {}
+
+    function checkEthBalance() public view returns (uint256) {
+        return (payable(address(this))).balance;
     }
 
-    // add/remove reserve
-    function modifyReserveMap(address reserveAddr,bool isAdd) public  onlyOwner {
-        Reserve res = Reserve(reserveAddr);
-        if (isAdd) {
-            reserves[res._token()] = res;
-        } else {
-            delete reserves[res._token()];
+    function getListOfSupportedTokens() public view returns (address[] memory) {
+        return tokenAddresses;
+    }
+
+    function getExchangeRate(
+        // token to sell
+        address srcToken,
+        // token to buy
+        address destToken,
+        uint256 srcAmount
+    ) public view returns (uint256) {
+        require(
+            token_reserve_map[payable(srcToken)] != address(0x0),
+            "Exchange - getExchangeRate: Token from does not supported"
+        );
+        require(
+            token_reserve_map[destToken] != address(0x0),
+            "Exchange - getExchangeRate: Token destined does not supported"
+        );
+        require(
+            srcAmount > 0,
+            "Exchange - getExchangeRate: Token amounts to trade has to be larger than 0"
+        );
+        uint256 rate = ((Reserve(payable(token_reserve_map[payable(srcToken)])).getExchangeRate(false, srcAmount) * 10**9) /Reserve(payable(token_reserve_map[payable(destToken)])).getExchangeRate(true, 1)) * 10**9;
+        return rate;
+    }
+
+    function exchange(
+        address srcToken,
+        address destToken,
+        uint256 srcAmount
+    ) public payable returns (uint256) {
+        require(
+            token_reserve_map[payable(srcToken)] != address(0x0),
+            "Exchange - getExchangeRate: Token from does not supported"
+        );
+        require(
+            token_reserve_map[destToken] != address(0x0),
+            "Exchange - getExchangeRate: Token destined does not supported"
+        );
+        require(
+            srcAmount > 0,
+            "Exchange - getExchangeRate: Token amounts to trade has to be larger than 0"
+        );
+        Reserve srcReserve = Reserve(payable(token_reserve_map[srcToken]));
+        Reserve destReserve = Reserve(payable(token_reserve_map[destToken]));
+
+        uint256 destAmount = getExchangeRate(srcToken, destToken, srcAmount) / 10 ** 18;
+        uint256 weiToBuy = destReserve.getExchangeRate(true, destAmount) ;
+        require(
+            destReserve.getBalanceOf(address(destReserve)) >= destAmount,
+            "Exchange: currently this Reserve doesnt have enough destination Token"
+        );
+
+        // Step 1: Transfer amount token original to exchange contract
+        srcReserve.getToken().transferFromTo(tx.origin, address(this) , srcAmount);
+        require(
+            srcReserve.getBalanceOf(address(this)) >= srcAmount,
+            "Exchange: sender doesn't have enough Tokens"
+        );
+        // Step 2: Sell token to original reserve to get ETH
+        srcReserve.exchange(false, srcAmount);
+        // Step 3: Use receive ETH to buy Tokens from dest Reserve
+        destReserve.exchange{value: weiToBuy}(true, destAmount);
+        // Step 4: Send received token from contract to user
+        destReserve.getToken().transfer(msg.sender, destAmount);
+        return weiToBuy;
+    }
+
+    function deposit() public payable {}
+
+    function getAllowance(address srcToken) public view returns (uint256) {
+        Reserve srcReserve = Reserve(payable(token_reserve_map[srcToken]));
+
+        return srcReserve.getToken().allowance(msg.sender, address(this));
+    }
+
+    function buyToken(address srcToken, uint256 srcAmount)
+        public
+        payable
+        returns (bool)
+    {
+        require(
+            token_reserve_map[payable(srcToken)] != address(0x0),
+            "Exchange - buyToken: Token from does not supported"
+        );
+        Reserve srcReserve = Reserve(payable(token_reserve_map[srcToken]));
+        uint256 destAmount = 10**18 / srcReserve.getExchangeRate(true, 1);
+        uint256 ethToBuy = srcReserve.getExchangeRate(true, destAmount); // get ammount of ETH required to buy "amount" of token
+        require(
+            msg.value >= ethToBuy,
+            "Reserve - exchange: ETH received did not meet the required amount!"
+        ); // check if the deposited ETH is enough to buy token
+        if (msg.value > ethToBuy) {
+            // refund
+            uint256 ethToRefund = msg.value - ethToBuy; // get refund amount
+            address payable addressToRefund = payable(msg.sender); // convert address to payable address
+            transfer(addressToRefund, ethToRefund); // refund excess ETH for user
+        }
+        if(srcReserve.exchange{value: ethToBuy}(true, destAmount)){
+            srcReserve.getToken().transfer(tx.origin, destAmount);
+        } 
+    }
+
+    function sellToken(address srcToken, uint256 srcAmount)
+        public
+        payable
+        returns (bool)
+    {
+        require(
+            token_reserve_map[payable(srcToken)] != address(0x0),
+            "Exchange - sellToken: Token from does not supported"
+        );
+        Reserve srcReserve = Reserve(payable(token_reserve_map[srcToken]));
+        srcReserve.getToken().transferFromTo(tx.origin, address(this), srcAmount);
+        uint256 ethToRecieve = srcReserve.getExchangeRate(false, srcAmount);
+        if(srcReserve.exchange(false, srcAmount)){
+            transfer(payable(msg.sender), ethToRecieve);
+            return true;
         }
     }
 
-    // get Exchange Rate
-    function getExchangeRate(Token srcToken, Token destToken) public view returns (uint256[2] memory) {
-        // srcToken -> ETH -> destToken
-        // rate = buyrate dest / sellrate src
-        uint256 srcRate = reserves[destToken].getExchangeRate(true);
-        uint256 destRate = reserves[srcToken].getExchangeRate(false);
-
-        uint256[2] memory rates;
-        rates[0] = srcRate;
-        rates[1] = destRate;
-
-        return rates;
-        
+    function transferToken(address token, address from, address to, uint256 srcAmount) public returns (bool) {
+        require(
+            token_reserve_map[payable(token)] != address(0x0),
+            "Exchange - sellToken: Token from does not supported"
+        );
+        Reserve srcReserve = Reserve(payable(token_reserve_map[token]));
+        return srcReserve.getToken().transferFromTo(from, to, srcAmount);
     }
 
-    function exchangeBetweenTokens(Token srcToken, Token destToken, uint256 srcAmount) public payable {
-        require(srcAmount > 0, "Exchange Token -> Token: Amount must be bigger than 0");
-        // require(msg.value == srcAmount, "Exchange Token -> Token: msg.value != value");
-        // dest amount  = src * buy rate A / 1e18
-        uint256 destAmount = convertEthToTokenByRate(srcAmount, reserves[srcToken].getExchangeRate(true));
-        // sell token a -> eth
-        // buy eth -> token b
-        reserves[srcToken].exchange(false, srcAmount);
-        reserves[destToken].exchange(true, destAmount);
-
-        destToken.transfer(msg.sender, destToken.balanceOf(address(this)));
-
+    function transfer(address payable _to, uint _amount) public {
+        // Note that "to" is declared as payable
+        (bool success, ) = _to.call{value: _amount}("");
+        require(success, "Reserve: Failed to send Ether");
     }
 
-    function exchangeEthToToken(Token token, uint256 amount) public payable {
-        require(amount > 0, "Exchange Eth -> Token: Amount must be bigger than 0");
-        // require(msg.value == amount, "Exchange Eth -> Token: msg.value != amount");
 
-        reserves[token].exchange(true, amount);
-        token.transfer(msg.sender, token.balanceOf(address(this)));
+    function addReserve(Reserve newReserve) public onlyOwner {
+        // get token
+        BasicToken token = newReserve.getToken();
+        address tokenAddress = address(token);
+        string memory symbol = token.symbol();
+        string memory name = token.name();
+
+        // Validate new token: new token must not exist in tokenAddresses
+        for (uint8 index = 0; index < tokenAddresses.length; index++) {
+            require(tokenAddress != tokenAddresses[index]);
+            require(!equal(token.symbol(), tokenSymbols[index]));
+            require(!equal(name, tokenNames[index]));
+        }
+
+        // mapping token to reserve
+        token_reserve_map[tokenAddress] = address(newReserve);
+        // add token to list of tokens (Using in getting list of supported token)
+        tokenAddresses.push(tokenAddress);
+        tokenSymbols.push(symbol);
+        tokenNames.push(name);
     }
 
-    function exchangeTokenToEth(Token token, uint256 amount) public payable {
-        require(amount > 0, "Exchange Token -> Eth: Amount must be bigger than 0");
-
-        reserves[token].exchange(false, amount);
-        token.transfer(msg.sender, token.balanceOf(address(this)));
+    // // Remove reserve
+    function removeReserve(address tokenAddress) public onlyOwner {
+        for (uint8 index = 0; index < tokenAddresses.length; index++) {
+            if (tokenAddress == tokenAddresses[index]) {
+                removeReserveData(index);
+                break;
+            }
+        }
+        delete token_reserve_map[tokenAddress];
     }
-    
+
+    function removeReserveData(uint256 index) private {
+        // Đẩy các phần tử phía sau lên phía trước 1 đơn vị
+        for (uint256 i = index; i < tokenAddresses.length - 1; i++) {
+            tokenAddresses[i] = tokenAddresses[i + 1];
+            tokenSymbols[i] = tokenSymbols[i + 1];
+            tokenNames[i] = tokenNames[i + 1];
+        }
+        // Xóa bỏ phần tử cuối cùng
+        tokenAddresses.pop();
+        tokenSymbols.pop();
+        tokenNames.pop();
+    }
+
+    function compare(string memory _a, string memory _b)
+        private
+        pure
+        returns (int256)
+    {
+        bytes memory a = bytes(_a);
+        bytes memory b = bytes(_b);
+        uint256 minLength = a.length;
+        if (b.length < minLength) minLength = b.length;
+        //@todo unroll the loop into increments of 32 and do full 32 byte comparisons
+        for (uint256 i = 0; i < minLength; i++)
+            if (a[i] < b[i]) return -1;
+            else if (a[i] > b[i]) return 1;
+        if (a.length < b.length) return -1;
+        else if (a.length > b.length) return 1;
+        else return 0;
+    }
+
+    /// @dev Compares two strings and returns true iff they are equal.
+    function equal(string memory _a, string memory _b)
+        private
+        pure
+        returns (bool)
+    {
+        return compare(_a, _b) == 0;
+    }
+
+    function mul(uint256 x, uint256 y) internal pure returns (uint256 z) {
+        require(y == 0 || (z = x * y) / y == x, "ds-math-mul-overflow");
+    }
 }

@@ -243,10 +243,6 @@ input {
 .input-item--single {
   padding-left: 20px;
 }
-
-.input-placeholder {
-
-}
 /*========= End Input =========*/
 
 /*========= Import Account =========*/
@@ -370,3 +366,14 @@ input {
   display: block;
 }
 /*========= End Transfer =========*/
+
+.conected-account {
+  visibility: hidden;
+  width: 81%;
+  margin-top: 20px;
+}
+
+.display-account{
+  padding-left: 50px;
+  
+}
