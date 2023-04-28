@@ -33,7 +33,7 @@ contract Reserve {
 
     // FUNCTION
     // Set Rate
-    function setExchangeRates(
+    function setExchangeRate(
         uint256 buyRate,
         uint256 sellRate
     ) public onlyOwner {
@@ -121,8 +121,13 @@ contract Reserve {
     }
 
     // Get supported token name
-    function getSupportedToken() public view returns (string memory) {
-        return _supportedToken;
+    function getSupportedTokenName() public view returns (string memory) {
+        return _token.getName();
+    }
+
+    // Get supported token name
+    function getSupportedTokenSymbol() public view returns (string memory) {
+        return  _token.getSymbol();
     }
 
     // Get balances of user
@@ -144,6 +149,10 @@ contract Reserve {
 
     function getContractBalance(address) public view returns (uint) {
         return address(this).balance;
+    }
+
+    function getOwner() public view returns (address){
+        return _owner;
     }
     // GET DATA
 

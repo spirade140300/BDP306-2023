@@ -12,7 +12,7 @@ contract Exchange {
     address public owner;
 
     modifier onlyOwner() {
-        require(msg.sender == owner);
+        require(msg.sender == owner, "Exchange: Sender is not owner");
         _;
     }
 
@@ -163,18 +163,30 @@ contract Exchange {
         require(success, "Reserve: Failed to send Ether");
     }
 
+    function getOwner() public view returns (address){
+        return owner;
+    }
 
-    function addReserve(Reserve newReserve) public onlyOwner {
+    function checkIfTokenIsSupported(address tokenAddress) public view returns (bool){
+        if(token_reserve_map[payable(tokenAddress)] != address(0x0)){
+            return true;
+        }else{
+            return false;
+        }
+    }
+
+
+    function addReserve(Reserve newReserve) public onlyOwner returns (bool) {
         // get token
         BasicToken token = newReserve.getToken();
         address tokenAddress = address(token);
-        string memory symbol = token.symbol();
-        string memory name = token.name();
+        string memory symbol = token.getSymbol();
+        string memory name = token.getName();
 
         // Validate new token: new token must not exist in tokenAddresses
         for (uint8 index = 0; index < tokenAddresses.length; index++) {
             require(tokenAddress != tokenAddresses[index]);
-            require(!equal(token.symbol(), tokenSymbols[index]));
+            require(!equal(token.getSymbol(), tokenSymbols[index]));
             require(!equal(name, tokenNames[index]));
         }
 
@@ -184,6 +196,7 @@ contract Exchange {
         tokenAddresses.push(tokenAddress);
         tokenSymbols.push(symbol);
         tokenNames.push(name);
+        return true;
     }
 
     // // Remove reserve

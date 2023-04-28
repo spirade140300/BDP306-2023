@@ -163,9 +163,3 @@ contract("Reserve", function (accounts) {
 
 });
   
-contract("Exchange", async function (accounts) {
-  it('Exchange - Check contract deployment', async function() {
-    const exchange = await Exchange.deployed({ from: accounts[0]});
-    assert.isObject(exchange);
-  });
-});

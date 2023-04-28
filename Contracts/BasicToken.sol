@@ -2,8 +2,8 @@ pragma solidity ^0.8.0;
 import "./IERC20.sol";
 
 contract BasicToken is IERC20 {
-    string public name;
-    string public symbol;
+    string private name;
+    string private symbol;
     uint8 public constant decimals = 18;
 
     mapping(address => uint256) private _balances;
@@ -95,5 +95,13 @@ contract BasicToken is IERC20 {
 
         _allowed[owner][spender] = amount;
         emit Approval(owner, spender, amount);
+    }
+
+    function getName() public view returns (string memory){
+        return name;
+    }
+
+    function getSymbol() public view returns (string memory){
+        return symbol;
     }
 }
